@@ -2,7 +2,9 @@ define(function (require) {
 	var l10n = require("webL10n");
 	var activity = require("sugar-web/activity/activity");
 	var datastore = require("sugar-web/datastore");
+	var notepalette = require("notepalette");
 	var zoompalette = require("zoompalette");
+	var defaultColor = '#FFF29F';
 
 	// Manipulate the DOM only when it is ready.
 	require(['domReady!'], function (doc) {
@@ -27,6 +29,15 @@ define(function (require) {
 		}
 		nodetextButton.addEventListener('click', function () { switchMode(0); }, true);
 		removeButton.addEventListener('click', function () { switchMode(2); }, true);
+		var colorButton = document.getElementById("color-button");
+		colorPalette = new notepalette.NotePalette(colorButton);
+		colorPalette.setColor('rgb(255, 242, 159)');
+		colorPalette.addEventListener('colorChange', function(e) {
+			lastSelected.style('background-color', e.detail.color);
+			lastSelected.data('background-color', e.detail.color);
+			defaultColor = e.detail.color;
+			pushState();
+		});
 		var zoomButton = document.getElementById("zoom-button");
 		zoomPalette = new zoompalette.zoomPalette(zoomButton);
 		zoomPalette.addEventListener('pop', function(e) {
@@ -123,7 +134,7 @@ define(function (require) {
 						'text-halign': 'center',
 						'border-color': 'darkgray',
 						'border-width': '1px',
-						'background-color': '#FFF29F',
+						'background-color': defaultColor,
 						'text-wrap': 'wrap',
 						'text-max-width': '200px',
 						'shadow-color': 'black',
@@ -206,7 +217,8 @@ define(function (require) {
 			});
 			var newnode = cy.getElementById('n'+nodeCount);
 			newnode.style({
-				'content': text
+				'content': text,
+				'background-color': defaultColor				
 			});
 			newnode.addClass('standard-node');
 			return newnode;

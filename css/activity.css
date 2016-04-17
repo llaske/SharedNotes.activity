@@ -15,10 +15,6 @@
   background-image: url(../icons/nodetext-mode.svg);
 }
 
-#main-toolbar #link-button {
-  background-image: url(../icons/link-mode.svg);
-}
-
 #main-toolbar #delete-button {
   background-image: url(../icons/delete-mode.svg);
 }
@@ -48,14 +44,6 @@
 .zoombutton:active {
   background-color: #808080;
   border-radius: 5.5px !important;
-}
-
-#sub-toolbar {
-  position: absolute;
-  width: 100%;
-  padding: 0 !important;
-  visibility: hidden;
-  z-index: 2;
 }
 
 .search-field-border {
@@ -93,14 +81,6 @@
   top: 5px;
 }
 
-#sub-toolbar #bold-button {
-  background-image: url(../icons/bold-text.svg);
-}
-
-#sub-toolbar #italics-button {
-  background-image: url(../icons/italics-text.svg);
-}
-
 .splitbar {
   background-image: url(../icons/split.svg);
   background-position: center;
@@ -114,25 +94,6 @@
   vertical-align: bottom;
 }
 
-#sub-toolbar #fontminus-button {
-  background-image: url(../icons/resize-.svg);
-}
-
-#sub-toolbar #font-button {
-  background-image: url(../icons/font-text.svg);
-}
-
-#sub-toolbar #fontplus-button {
-  background-image: url(../icons/resize+.svg);
-}
-
-#fontsizecomputer {
-  position: absolute;
-  visibility: hidden;
-  height: auto;
-  width: auto;
-  white-space: nowrap;
-}
 .palette .colors {
   list-style-type: none;
   border-spacing: 0;
@@ -158,21 +119,6 @@
    width: 0px;
  }
 
- #sub-toolbar #fontminus-button {
-   visibility: hidden;
- }
-
- #sub-toolbar #font-button {
-   visibility: hidden;
- }
- 
- #fontpalette {
-   left: 0px !important;
- }
-
- #sub-toolbar #fontplus-button {
-   visibility: hidden;
- }
 }
 
 @media screen and (max-width: 810px) {
