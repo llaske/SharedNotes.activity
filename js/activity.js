@@ -106,90 +106,6 @@ define(function (require) {
 			pngButton.title = l10n.get("pngButtonTitle");
 		}, false);
 
-		// --- Cytoscape handling
-
-		// Initialize board
-		cy = cytoscape({
-			container: document.getElementById('cy'),
-
-			ready: function() {
-				// Create first node and select id
-				var firstNode = createNode(defaultText, getCenter());
-				firstNode.select();
-				selectNode(firstNode);
-				lastSelected = firstNode;
-				pushState();
-
-				// Load world
-				loadGraph();
-			},
-
-			style: [
-				{
-					selector: '.standard-node',
-					css: {
-						'width': '200px',
-						'height': '200px',
-						'text-valign': 'center',
-						'text-halign': 'center',
-						'border-color': 'darkgray',
-						'border-width': '1px',
-						'background-color': defaultColor,
-						'text-wrap': 'wrap',
-						'text-max-width': '200px',
-						'shadow-color': 'black',
-						'shadow-offset-x': '4px',
-						'shadow-offset-y': '4px',
-						'shadow-opacity': '0.5',
-						'shape': 'rectangle'
-					}
-				}
-			]
-		});
-
-		// Event: a node is selected
-		cy.on('tap', 'node', function() {
-			if (currentMode == 2) {
-				deleteNode(this);
-				pushState();
-				if (lastSelected == this) lastSelected = null;
-				return;
-			} else {
-				if (isSelectedNode(this)) {
-					unselectNode(this);
-				} else {
-					selectNode(this);
-				}
-				lastSelected = this;
-			}
-		});
-
-		// Event: a node is unselected
-		cy.on('unselect', 'node', function() {
-			unselectNode(this);
-		});
-
-		// Event: tap on the board
-		cy.on('tap', function(e){
-			if (e.cyTarget === cy) {
-				if (currentMode == 0) {
-					var newNode = createNode(defaultText, e.cyPosition);
-					if (lastSelected != null) {
-						unselectNode(lastSelected);
-					}
-					pushState();
-					newNode.select();
-					selectNode(newNode);
-					lastSelected = newNode;
-				}
-			}
-		});
-
-		// Event: elements moved
-		cy.on('free', 'node', function(e) {
-			pushState();
-		});
-
 		// --- Node and edge handling functions
 		var nodeCount = 0;
 		var defaultFontFamily = "Arial";
@@ -388,5 +304,90 @@ define(function (require) {
 			undoButton.disabled = (stateHistory.length < 1 || (stateHistory.length >= 1 && stateIndex == 0));
 			redoButton.disabled = (stateIndex+1 >= stateLength);
 		}
+
+		// --- Cytoscape handling
+
+		// Initialize board
+		cy = cytoscape({
+			container: document.getElementById('cy'),
+
+			ready: function() {
+				// Create first node and select id
+				cy = this;
+				var firstNode = createNode(defaultText, getCenter());
+				firstNode.select();
+				selectNode(firstNode);
+				lastSelected = firstNode;
+				pushState();
+
+				// Load world
+				loadGraph();
+			},
+
+			style: [
+				{
+					selector: '.standard-node',
+					css: {
+						'width': '200px',
+						'height': '200px',
+						'text-valign': 'center',
+						'text-halign': 'center',
+						'border-color': 'darkgray',
+						'border-width': '1px',
+						'background-color': defaultColor,
+						'text-wrap': 'wrap',
+						'text-max-width': '200px',
+						'shadow-color': 'black',
+						'shadow-offset-x': '4px',
+						'shadow-offset-y': '4px',
+						'shadow-opacity': '0.5',
+						'shape': 'rectangle'
+					}
+				}
+			]
+		});
+
+		// Event: a node is selected
+		cy.on('tap', 'node', function() {
+			if (currentMode == 2) {
+				deleteNode(this);
+				pushState();
+				if (lastSelected == this) lastSelected = null;
+				return;
+			} else {
+				if (isSelectedNode(this)) {
+					unselectNode(this);
+				} else {
+					selectNode(this);
+				}
+				lastSelected = this;
+			}
+		});
+
+		// Event: a node is unselected
+		cy.on('unselect', 'node', function() {
+			unselectNode(this);
+		});
+
+		// Event: tap on the board
+		cy.on('tap', function(e){
+			if (e.cyTarget === cy) {
+				if (currentMode == 0) {
+					var newNode = createNode(defaultText, e.cyPosition);
+					if (lastSelected != null) {
+						unselectNode(lastSelected);
+					}
+					pushState();
+					newNode.select();
+					selectNode(newNode);
+					lastSelected = newNode;
+				}
+			}
+		});
+
+		// Event: elements moved
+		cy.on('free', 'node', function(e) {
+			pushState();
+		});
 	});
 });
