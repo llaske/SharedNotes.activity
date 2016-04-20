@@ -112,6 +112,12 @@ define(function (require) {
 		var defaultFontSize = 16;
 		var lastSelected = null;
 		var defaultText = "<Your content>";
+		var textValue = document.getElementById("textvalue");
+		textValue.addEventListener('click', function (event) {
+			hideEditField();
+			updateNodeText(lastSelected, textValue.value);
+			unselectNode(lastSelected);
+		});
 
 		// Create a new node with text and position
 		var createNode = function(text, position) {
@@ -187,6 +193,27 @@ define(function (require) {
 
 		// --- Utility functions
 
+		// Show edit field 
+		var showEditField = function(node) {
+			var position = node.renderedPosition();
+			var zoom = cy.zoom();					
+			textValue.value = node.data('content');
+			textValue.style.visibility = "visible";
+			textValue.style.backgroundColor = node.style().backgroundColor;
+			var delta = 100 * zoom - 200 * zoom;
+			textValue.style.left = (position.x + delta) + "px";
+			textValue.style.top = (55 + position.y + delta) + "px";
+			textValue.style.width = 190 * zoom + "px";
+			textValue.style.height = 190 * zoom + "px";
+			textValue.setSelectionRange(textValue.value.length, textValue.value.length);
+			textValue.focus();
+		}
+		
+		// Hide edit field
+		var hideEditField = function() {
+			textvalue.style.visibility = "hidden";
+		}
+		
 		// Get center of drawing zone
 		var getCenter = function() {
 			var canvas = document.getElementById("canvas");
@@ -355,10 +382,13 @@ define(function (require) {
 				if (lastSelected == this) lastSelected = null;
 				return;
 			} else {
-				if (isSelectedNode(this)) {
-					unselectNode(this);
-				} else {
+				if (!isSelectedNode(this)) {
+					if (lastSelected != null) {
+						updateNodeText(lastSelected, textValue.value);
+						unselectNode(lastSelected);
+					}
 					selectNode(this);
+					showEditField(this);
 				}
 				lastSelected = this;
 			}
@@ -388,6 +418,20 @@ define(function (require) {
 		// Event: elements moved
 		cy.on('free', 'node', function(e) {
 			pushState();
+		});
+
+		// Event: zoom
+		cy.on('zoom', function() {
+			updateNodeText(lastSelected, textValue.value);		
+			hideEditField();
+			unselectNode(lastSelected);
+		});
+		
+		// Event: move
+		cy.on('pan', function() {
+			updateNodeText(lastSelected, textValue.value);		
+			hideEditField();
+			unselectNode(lastSelected);
 		});
 	});
 });

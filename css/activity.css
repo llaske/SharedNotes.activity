@@ -113,6 +113,14 @@
   margin-bottom: 5.5px;
 }
 
+.mle {
+	position: absolute;
+	visibility: hidden;
+	width: 190px;
+	height: 190px;
+	z-index: 100;
+}
+
 @media screen and (max-width: 905px) {
  .splitbar {
    visibility: hidden;
