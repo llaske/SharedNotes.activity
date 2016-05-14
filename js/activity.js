@@ -36,10 +36,10 @@ define(function (require) {
 			if (isSelectedNode(lastSelected)) {
 				lastSelected.style('background-color', e.detail.color);
 				lastSelected.data('background-color', e.detail.color);
+				pushState();
 			}
 			textValue.style.backgroundColor = e.detail.color;
 			defaultColor = e.detail.color;
-			pushState();
 		});
 		var zoomButton = document.getElementById("zoom-button");
 		zoomPalette = new zoompalette.zoomPalette(zoomButton);
@@ -151,6 +151,7 @@ define(function (require) {
 
 		// Update node text and change size
 		var updateNodeText = function(node, text) {
+			if (node == null) return;
 			if (text === undefined) text = node.style()['content'];
 			else node.data('content', text);
 			node.style({
@@ -160,11 +161,13 @@ define(function (require) {
 
 		// Test if node is selected
 		var isSelectedNode = function(node) {
+			if (node == null) return false;
 			return node.style()['border-style'] == 'dashed';
 		}
 
 		// Set node as selected
 		var selectNode = function(node) {
+			if (node == null) return;
 			node.style({
 				'border-color': 'black',
 				'border-style': 'dashed',
@@ -174,6 +177,7 @@ define(function (require) {
 
 		// Set node as unselected
 		var unselectNode = function(node) {
+			if (node == null) return;
 			node.style({
 				'border-color': 'darkgray',
 				'border-style': 'solid',
@@ -191,6 +195,7 @@ define(function (require) {
 
 		// Delete node, linked edges are removed too
 		var deleteNode = function(node) {
+			if (node == null) return;
 			cy.remove(node);
 		}
 
@@ -208,7 +213,10 @@ define(function (require) {
 			textValue.style.top = (55 + position.y + delta) + "px";
 			textValue.style.width = 190 * zoom + "px";
 			textValue.style.height = 190 * zoom + "px";
-			textValue.setSelectionRange(textValue.value.length, textValue.value.length);
+			if (textValue.value == defaultText)
+				textValue.setSelectionRange(0, textValue.value.length);
+			else
+				textValue.setSelectionRange(textValue.value.length, textValue.value.length);
 			textValue.focus();
 		}
 		
@@ -231,6 +239,7 @@ define(function (require) {
 				if (data == null)
 					return;
 				displayGraph(data);
+				hideEditField();
 				reinitState();
 				pushState();
 			});
