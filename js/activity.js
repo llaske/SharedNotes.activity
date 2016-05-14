@@ -33,8 +33,11 @@ define(function (require) {
 		colorPalette = new notepalette.NotePalette(colorButton);
 		colorPalette.setColor('rgb(255, 242, 159)');
 		colorPalette.addEventListener('colorChange', function(e) {
-			lastSelected.style('background-color', e.detail.color);
-			lastSelected.data('background-color', e.detail.color);
+			if (isSelectedNode(lastSelected)) {
+				lastSelected.style('background-color', e.detail.color);
+				lastSelected.data('background-color', e.detail.color);
+			}
+			textValue.style.backgroundColor = e.detail.color;
 			defaultColor = e.detail.color;
 			pushState();
 		});
@@ -344,6 +347,7 @@ define(function (require) {
 				var firstNode = createNode(defaultText, getCenter());
 				firstNode.select();
 				selectNode(firstNode);
+				showEditField(firstNode);
 				lastSelected = firstNode;
 				pushState();
 
@@ -405,11 +409,14 @@ define(function (require) {
 				if (currentMode == 0) {
 					var newNode = createNode(defaultText, e.cyPosition);
 					if (lastSelected != null) {
+						updateNodeText(lastSelected, textValue.value);
+						hideEditField();
 						unselectNode(lastSelected);
 					}
 					pushState();
 					newNode.select();
 					selectNode(newNode);
+					showEditField(newNode);
 					lastSelected = newNode;
 				}
 			}
