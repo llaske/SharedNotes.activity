@@ -114,7 +114,6 @@ define(function (require) {
 		}, false);
 
 		// --- Node and edge handling functions
-		var nodeCount = 0;
 		var defaultFontFamily = "Arial";
 		var defaultFontSize = 16;
 		var lastSelected = null;
@@ -253,7 +252,17 @@ define(function (require) {
 
 		// Generate a new id
 		var newId = function() {
-			return 'n'+(++nodeCount);
+			var s = [];
+			var hexDigits = "0123456789abcdef";
+			for (var i = 0; i < 36; i++) {
+				s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+			}
+			s[14] = "4";
+			s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1);
+			s[8] = s[13] = s[18] = s[23] = "-";
+
+			var uuid = s.join("");
+			return uuid;
 		}
 
 		// Handle an update command from history or from the network
@@ -297,58 +306,29 @@ define(function (require) {
 			datastoreObject.loadAsText(function (error, metadata, data) {
 				if (data == null)
 					return;
-				displayGraph(data);
+				cy.remove("node");
+				lastSelected = null;
+				for(var i = 0 ; i < data.length ; i++) {
+					doAction(data[i]);
+				}
 				hideEditField();
 				reinitState();
-				//pushState();
 			});
 		}
 
-		// Save graph to datastore
+		// Save graph to datastore, generate command to rebuild each node
 		var saveGraph = function(callback) {
 			var datastoreObject = activity.getDatastoreObject();
-			var jsonData = getGraph();
-			datastoreObject.setDataAsText(jsonData);
+			var nodes = cy.elements("node");
+			var commands = [];
+			for(var i = 0; i < nodes.length ; i++) {
+				var node = nodes[i];
+				commands.push({
+					action:"create", id:node.id(), text: node.data("content"), position: {x: node.position().x, y: node.position().y}, color: node.data("background-color")
+				});
+			}
+			datastoreObject.setDataAsText(commands);
 			datastoreObject.save(callback);
-		}
-
-		// Get a deep copy of current Graph
-		var deepCopy = function(o) {
-			var copy = o,k;
-			if (o && typeof o === 'object') {
-				copy = Object.prototype.toString.call(o) === '[object Array]' ? [] : {};
-				for (k in o) {
-					copy[k] = deepCopy(o[k]);
-				}
-			}
-			return copy;
-		}
-		var getGraph = function() {
-			return deepCopy(cy.json());
-		}
-
-		// Display a saved graph
-		var displayGraph = function(graph) {
-			// Destroy the graph
-			cy.remove("node");
-			lastSelected = null;
-
-			// Recreate nodes and set styles and text
-			cy.add({
-				group: 'nodes',
-				nodes: graph.elements.nodes
-			});
-			var nodes = cy.collection("node");
-			var maxCount = 0;
-			for (var i = 0 ; i < nodes.length ; i++) {
-				var newnode = nodes[i];
-				updateNodeText(newnode, newnode.data('content'));
-				newnode.style('color', newnode.data('color'));
-				newnode.style('background-color', newnode.data('background-color'));
-				var id = newnode.data('id').substr(1);
-				if (id > maxCount) maxCount = id;
-			}
-			nodeCount = maxCount+1;
 		}
 
 		// Do/Undo handling
