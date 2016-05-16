@@ -20,23 +20,27 @@ define(function (require) {
 			currentMode = newMode;
 			nodetextButton.classList.remove('active');
 			removeButton.classList.remove('active');
+			saveAndFinishEdit();
 			if (newMode == 0) nodetextButton.classList.add('active');
-			else if (newMode == 2) removeButton.classList.add('active');
+			else if (newMode == 1) removeButton.classList.add('active');
 			if (lastSelected != null) {
 				unselectAllNode();
 				lastSelected = null;
 			}
 		}
 		nodetextButton.addEventListener('click', function () { switchMode(0); }, true);
-		removeButton.addEventListener('click', function () { switchMode(2); }, true);
+		removeButton.addEventListener('click', function () { switchMode(1); }, true);
 		var colorButton = document.getElementById("color-button");
 		colorPalette = new notepalette.NotePalette(colorButton);
 		colorPalette.setColor('rgb(255, 242, 159)');
 		colorPalette.addEventListener('colorChange', function(e) {
 			if (isSelectedNode(lastSelected)) {
+				pushState({
+					redo: {action:"update", id:lastSelected.id(), color: e.detail.color},
+					undo: {action:"update", id:lastSelected.id(), color: lastSelected.data('background-color')}
+				});
 				lastSelected.style('background-color', e.detail.color);
 				lastSelected.data('background-color', e.detail.color);
-				pushState();
 			}
 			textValue.style.backgroundColor = e.detail.color;
 			defaultColor = e.detail.color;
@@ -116,22 +120,22 @@ define(function (require) {
 		var lastSelected = null;
 		var defaultText = "<Your content>";
 		var textValue = document.getElementById("textvalue");
+		var draggedPosition = null;
 		textValue.addEventListener('click', function (event) {
-			hideEditField();
-			updateNodeText(lastSelected, textValue.value);
-			unselectNode(lastSelected);
+			saveAndFinishEdit();
 		});
 
 		// Create a new node with text and position
-		var createNode = function(text, position) {
+		var createNode = function(id, text, position, color) {
 			cy.add({
 				group: 'nodes',
 				nodes: [
 					{
 						data: {
-							id: 'n'+(++nodeCount),
+							id: id,
 							'content': text,
-							'color': 'rgb(0, 0, 0)'
+							'color': 'rgb(0, 0, 0)',
+							'background-color': color
 						},
 						position: {
 							x: position.x,
@@ -140,10 +144,10 @@ define(function (require) {
 					}
 				]
 			});
-			var newnode = cy.getElementById('n'+nodeCount);
+			var newnode = cy.getElementById(id);
 			newnode.style({
 				'content': text,
-				'background-color': defaultColor				
+				'background-color': color
 			});
 			newnode.addClass('standard-node');
 			return newnode;
@@ -152,11 +156,18 @@ define(function (require) {
 		// Update node text and change size
 		var updateNodeText = function(node, text) {
 			if (node == null) return;
+			var previous = node.data('content');
 			if (text === undefined) text = node.style()['content'];
 			else node.data('content', text);
 			node.style({
 				'content': text
 			});
+			if (previous != text) {
+				pushState({
+					redo: {action:"update", id:node.id(), text: text},
+					undo: {action:"update", id:node.id(), text: previous}
+				});
+			}
 		}
 
 		// Test if node is selected
@@ -201,10 +212,10 @@ define(function (require) {
 
 		// --- Utility functions
 
-		// Show edit field 
+		// Show edit field
 		var showEditField = function(node) {
 			var position = node.renderedPosition();
-			var zoom = cy.zoom();					
+			var zoom = cy.zoom();
 			textValue.value = node.data('content');
 			textValue.style.visibility = "visible";
 			textValue.style.backgroundColor = node.style().backgroundColor;
@@ -219,12 +230,20 @@ define(function (require) {
 				textValue.setSelectionRange(textValue.value.length, textValue.value.length);
 			textValue.focus();
 		}
-		
+
 		// Hide edit field
 		var hideEditField = function() {
 			textvalue.style.visibility = "hidden";
 		}
-		
+
+		var saveAndFinishEdit = function() {
+			if (lastSelected != null && isSelectedNode(lastSelected)) {
+				updateNodeText(lastSelected, textValue.value);
+				hideEditField();
+				unselectNode(lastSelected);
+			}
+		}
+
 		// Get center of drawing zone
 		var getCenter = function() {
 			var canvas = document.getElementById("canvas");
@@ -232,6 +251,46 @@ define(function (require) {
 			return center;
 		}
 
+		// Generate a new id
+		var newId = function() {
+			return 'n'+(++nodeCount);
+		}
+
+		// Handle an update command from history or from the network
+		var doAction = function(command) {
+			if (command.action === undefined) return;
+			else if (command.action == 'create') {
+				// Create a new node
+				createNode(command.id, command.text, command.position, command.color);
+			} else if (command.action == 'delete') {
+				// Get the node
+				var node = cy.getElementById(command.id);
+				if (node == null) return;
+
+				// Delete it
+				cy.remove(node);
+			} else if (command.action == 'update') {
+				// Get the node
+				var node = cy.getElementById(command.id);
+				if (node == null) return;
+
+				// Update it
+				if (command.text !== undefined) {
+					node.data('content', command.text);
+					node.style({'content': command.text});
+				}
+				if (command.color !== undefined) {
+					node.data('background-color', command.color);
+					node.style({'background-color': command.color});
+				}
+				if (command.position !== undefined) {
+					node.position({
+						x: command.position.x,
+						y: command.position.y
+					});
+				}
+			}
+		}
 		// Load graph from datastore
 		var loadGraph = function() {
 			var datastoreObject = activity.getDatastoreObject();
@@ -241,7 +300,7 @@ define(function (require) {
 				displayGraph(data);
 				hideEditField();
 				reinitState();
-				pushState();
+				//pushState();
 			});
 		}
 
@@ -297,16 +356,16 @@ define(function (require) {
 		var stateIndex = 0;
 		var maxHistory = 30;
 		var undoButton = document.getElementById("undo-button");
-		undoButton.addEventListener('click', function () { undoState(); }, true);
+		undoButton.addEventListener('click', function () { saveAndFinishEdit(); undoState(); }, true);
 		var redoButton = document.getElementById("redo-button");
-		redoButton.addEventListener('click', function () { redoState(); }, true);
+		redoButton.addEventListener('click', function () { saveAndFinishEdit(); redoState(); }, true);
 
 		var reinitState = function() {
 			stateHistory = [];
 			stateIndex = 0;
 		}
 
-		var pushState = function() {
+		var pushState = function(state) {
 			if (stateIndex < stateHistory.length - 1) {
 				var stateCopy = [];
 				for (var i = 0 ; i < stateIndex + 1; i++)
@@ -314,33 +373,35 @@ define(function (require) {
 				stateHistory = stateCopy;
 			}
 			var stateLength = stateHistory.length - 1;
-			var currentState = getGraph();
+			var currentState = state;
 			if (stateLength < maxHistory) stateHistory.push(currentState);
 			else {
-				for (var i = 0 ; i < stateLength-1 ; i++) {
+				for (var i = 0 ; i < stateLength ; i++) {
 					stateHistory[i] = stateHistory[i+1];
 				}
-				stateHistory[stateLength-1] = currentState;
+				stateHistory[stateHistory.length-1] = currentState;
 			}
 			stateIndex = stateHistory.length - 1;
 			updateStateButtons();
 		}
 
 		var undoState = function() {
-			if (stateHistory.length < 1 || (stateHistory.length >= 1 && stateIndex == 0)) return;
-			displayGraph(stateHistory[--stateIndex]);
+			if (stateHistory.length < 1 || stateIndex < 0) return;
+			var undo = stateHistory[stateIndex--].undo;
+			doAction(undo);
 			updateStateButtons();
 		}
 
 		var redoState = function() {
 			if (stateIndex+1 >= stateHistory.length) return;
-			displayGraph(stateHistory[++stateIndex]);
+			var redo = stateHistory[++stateIndex].redo;
+			doAction(redo);
 			updateStateButtons();
 		}
 
 		var updateStateButtons = function() {
 			var stateLength = stateHistory.length;
-			undoButton.disabled = (stateHistory.length < 1 || (stateHistory.length >= 1 && stateIndex == 0));
+			undoButton.disabled = (stateHistory.length < 1 || stateIndex < 0);
 			redoButton.disabled = (stateIndex+1 >= stateLength);
 		}
 
@@ -353,12 +414,15 @@ define(function (require) {
 			ready: function() {
 				// Create first node and select id
 				cy = this;
-				var firstNode = createNode(defaultText, getCenter());
+				var firstNode = createNode(newId(), defaultText, getCenter(), defaultColor);
+				pushState({
+					redo: {action:"create", id:firstNode.id(), text: firstNode.data("content"), position: {x: firstNode.position().x, y: firstNode.position().y}, color: defaultColor},
+					undo: {action:"delete", id:firstNode.id()}
+				});
 				firstNode.select();
 				selectNode(firstNode);
 				showEditField(firstNode);
 				lastSelected = firstNode;
-				pushState();
 
 				// Load world
 				loadGraph();
@@ -389,9 +453,12 @@ define(function (require) {
 
 		// Event: a node is selected
 		cy.on('tap', 'node', function() {
-			if (currentMode == 2) {
+			if (currentMode == 1) {
+				pushState({
+					redo: {action:"delete", id:this.id()},
+					undo: {action:"create", id:this.id(), text: this.data("content"), position: {x: this.position().x, y: this.position().y}, color: defaultColor}
+				});
 				deleteNode(this);
-				pushState();
 				if (lastSelected == this) lastSelected = null;
 				return;
 			} else {
@@ -409,6 +476,7 @@ define(function (require) {
 
 		// Event: a node is unselected
 		cy.on('unselect', 'node', function() {
+			saveAndFinishEdit();
 			unselectNode(this);
 		});
 
@@ -416,13 +484,11 @@ define(function (require) {
 		cy.on('tap', function(e){
 			if (e.cyTarget === cy) {
 				if (currentMode == 0) {
-					var newNode = createNode(defaultText, e.cyPosition);
-					if (lastSelected != null) {
-						updateNodeText(lastSelected, textValue.value);
-						hideEditField();
-						unselectNode(lastSelected);
-					}
-					pushState();
+					var newNode = createNode(newId(), defaultText, e.cyPosition, defaultColor);
+					pushState({
+						redo: {action:"create", id:newNode.id(), text: newNode.data("content"), position: {x: newNode.position().x, y: newNode.position().y}, color: defaultColor},
+						undo: {action:"delete", id:newNode.id()}
+					});
 					newNode.select();
 					selectNode(newNode);
 					showEditField(newNode);
@@ -432,22 +498,31 @@ define(function (require) {
 		});
 
 		// Event: elements moved
+		cy.on('drag', 'node', function(e) {
+			saveAndFinishEdit();
+			if (draggedPosition == null) {
+				draggedPosition = {x: this.position().x, y: this.position().y};
+			}
+		});
+
 		cy.on('free', 'node', function(e) {
-			pushState();
+			if (draggedPosition != null && (this.position().x != draggedPosition.x || this.position().y != draggedPosition.y)) {
+				pushState({
+					redo: {action:"update", id:this.id(), position: {x: this.position().x, y: this.position().y}},
+					undo: {action:"update", id:this.id(), position: {x: draggedPosition.x, y: draggedPosition.y}}
+				});
+			}
+			draggedPosition = null;
 		});
 
 		// Event: zoom
 		cy.on('zoom', function() {
-			updateNodeText(lastSelected, textValue.value);		
-			hideEditField();
-			unselectNode(lastSelected);
+			saveAndFinishEdit();
 		});
-		
+
 		// Event: move
 		cy.on('pan', function() {
-			updateNodeText(lastSelected, textValue.value);		
-			hideEditField();
-			unselectNode(lastSelected);
+			saveAndFinishEdit();
 		});
 	});
 });
