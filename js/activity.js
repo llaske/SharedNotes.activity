@@ -4,6 +4,7 @@ define(function (require) {
 	var datastore = require("sugar-web/datastore");
 	var notepalette = require("notepalette");
 	var zoompalette = require("zoompalette");
+	var presencepalette = require("sugar-web/graphics/presencepalette");
 	var defaultColor = '#FFF29F';
 
 	// Manipulate the DOM only when it is ready.
@@ -111,8 +112,16 @@ define(function (require) {
 			redoButton.title = l10n.get("redoButtonTitle");
 			zoomButton.title = l10n.get("zoomButtonTitle");
 			pngButton.title = l10n.get("pngButtonTitle");
+			networkButton.title = l10n.get("networkButtonTitle");
 		}, false);
 
+		// Handle presence palette
+		var networkButton = document.getElementById("network-button");
+		var presence = new presencepalette.PresencePalette(networkButton, undefined);
+		presence.addEventListener('shared', function() {});
+		if (window.top && window.top.sugar && window.top.sugar.environment && window.top.sugar.environment.sharedId) {
+			presence.setShared(true);
+		}
 		// --- Node and edge handling functions
 		var defaultFontFamily = "Arial";
 		var defaultFontSize = 16;
