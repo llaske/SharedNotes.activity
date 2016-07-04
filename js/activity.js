@@ -5,7 +5,13 @@ define(function (require) {
 	var notepalette = require("notepalette");
 	var zoompalette = require("zoompalette");
 	var presencepalette = require("sugar-web/graphics/presencepalette");
+	var humane = require("humane");
 	var defaultColor = '#FFF29F';
+	var isShared = false;
+	var isHost = false;
+	var network = null;
+	var connectedPeople = {};
+	var xoLogo = '<?xml version="1.0" ?><!DOCTYPE svg  PUBLIC \'-//W3C//DTD SVG 1.1//EN\'  \'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\' [<!ENTITY stroke_color "#010101"><!ENTITY fill_color "#FFFFFF">]><svg enable-background="new 0 0 55 55" height="55px" version="1.1" viewBox="0 0 55 55" width="55px" x="0px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" y="0px"><g display="block" id="stock-xo_1_"><path d="M33.233,35.1l10.102,10.1c0.752,0.75,1.217,1.783,1.217,2.932   c0,2.287-1.855,4.143-4.146,4.143c-1.145,0-2.178-0.463-2.932-1.211L27.372,40.961l-10.1,10.1c-0.75,0.75-1.787,1.211-2.934,1.211   c-2.284,0-4.143-1.854-4.143-4.141c0-1.146,0.465-2.184,1.212-2.934l10.104-10.102L11.409,24.995   c-0.747-0.748-1.212-1.785-1.212-2.93c0-2.289,1.854-4.146,4.146-4.146c1.143,0,2.18,0.465,2.93,1.214l10.099,10.102l10.102-10.103   c0.754-0.749,1.787-1.214,2.934-1.214c2.289,0,4.146,1.856,4.146,4.145c0,1.146-0.467,2.18-1.217,2.932L33.233,35.1z" fill="&fill_color;" stroke="&stroke_color;" stroke-width="3.5"/><circle cx="27.371" cy="10.849" fill="&fill_color;" r="8.122" stroke="&stroke_color;" stroke-width="3.5"/></g></svg>';
 
 	// Manipulate the DOM only when it is ready.
 	require(['domReady!'], function (doc) {
@@ -114,14 +120,7 @@ define(function (require) {
 			pngButton.title = l10n.get("pngButtonTitle");
 			networkButton.title = l10n.get("networkButtonTitle");
 		}, false);
-
-		// Handle presence palette
-		var networkButton = document.getElementById("network-button");
-		var presence = new presencepalette.PresencePalette(networkButton, undefined);
-		presence.addEventListener('shared', function() {});
-		if (window.top && window.top.sugar && window.top.sugar.environment && window.top.sugar.environment.sharedId) {
-			presence.setShared(true);
-		}
+		
 		// --- Node and edge handling functions
 		var defaultFontFamily = "Arial";
 		var defaultFontSize = 16;
@@ -310,32 +309,39 @@ define(function (require) {
 			}
 		}
 		// Load graph from datastore
+		var initGraph = function(graph) {
+			if (graph == null)
+				return;
+			cy.remove("node");
+			lastSelected = null;
+			for(var i = 0 ; i < graph.length ; i++) {
+				doAction(graph[i]);
+			}
+			hideEditField();
+			reinitState();
+		}
 		var loadGraph = function() {
 			var datastoreObject = activity.getDatastoreObject();
 			datastoreObject.loadAsText(function (error, metadata, data) {
-				if (data == null)
-					return;
-				cy.remove("node");
-				lastSelected = null;
-				for(var i = 0 ; i < data.length ; i++) {
-					doAction(data[i]);
-				}
-				hideEditField();
-				reinitState();
+				initGraph(data);
 			});
 		}
 
 		// Save graph to datastore, generate command to rebuild each node
-		var saveGraph = function(callback) {
-			var datastoreObject = activity.getDatastoreObject();
-			var nodes = cy.elements("node");
+		var getGraph = function() {
 			var commands = [];
+			var nodes = cy.elements("node");
 			for(var i = 0; i < nodes.length ; i++) {
 				var node = nodes[i];
 				commands.push({
 					action:"create", id:node.id(), text: node.data("content"), position: {x: node.position().x, y: node.position().y}, color: node.data("background-color")
 				});
 			}
+			return commands;
+		}
+		var saveGraph = function(callback) {
+			var datastoreObject = activity.getDatastoreObject();
+			var commands = getGraph();
 			datastoreObject.setDataAsText(commands);
 			datastoreObject.save(callback);
 		}
@@ -354,7 +360,7 @@ define(function (require) {
 			stateIndex = 0;
 		}
 
-		var pushState = function(state) {
+		var pushState = function(state, fromNetwork) {
 			if (stateIndex < stateHistory.length - 1) {
 				var stateCopy = [];
 				for (var i = 0 ; i < stateIndex + 1; i++)
@@ -371,20 +377,36 @@ define(function (require) {
 				stateHistory[stateHistory.length-1] = currentState;
 			}
 			stateIndex = stateHistory.length - 1;
+			if (isShared && !fromNetwork) {
+				sendMessage({
+					action: 'updateBoard',
+					data: state
+				});
+			}
 			updateStateButtons();
 		}
 
-		var undoState = function() {
+		var undoState = function(fromNetwork) {
 			if (stateHistory.length < 1 || stateIndex < 0) return;
 			var undo = stateHistory[stateIndex--].undo;
 			doAction(undo);
+			if (isShared && !fromNetwork) {
+				sendMessage({
+					action: 'undoBoard'
+				});
+			}
 			updateStateButtons();
 		}
 
-		var redoState = function() {
+		var redoState = function(fromNetwork) {
 			if (stateIndex+1 >= stateHistory.length) return;
 			var redo = stateHistory[++stateIndex].redo;
 			doAction(redo);
+			if (isShared && !fromNetwork) {
+				sendMessage({
+					action: 'redoBoard'
+				});
+			}
 			updateStateButtons();
 		}
 
@@ -392,6 +414,155 @@ define(function (require) {
 			var stateLength = stateHistory.length;
 			undoButton.disabled = (stateHistory.length < 1 || stateIndex < 0);
 			redoButton.disabled = (stateIndex+1 >= stateLength);
+		}
+
+		// Users network list functions
+		var generateXOLogoWithColor = function(color) {
+			var coloredLogo = xoLogo;
+			coloredLogo = coloredLogo.replace("#010101", color.stroke)
+			coloredLogo = coloredLogo.replace("#FFFFFF", color.fill)
+			return "data:image/svg+xml;base64," + btoa(coloredLogo);
+		}
+		var displayConnectedPeopleHtml = function() {
+			var presenceUsersDiv = document.getElementById("presence-users");
+			var html = "<hr><ul style='list-style: none; padding:0;'>"
+			for (var key in connectedPeople) {
+				html += "<li><img style='height:30px;' src='" + generateXOLogoWithColor(connectedPeople[key].color) + "'>" + connectedPeople[key].name + "</li>"
+			}
+			html += "</ul>"
+			presenceUsersDiv.innerHTML = html
+		}
+		var displayConnectedPeople = function(users) {
+			var presenceUsersDiv = document.getElementById("presence-users");
+			if (!users || !presenceUsersDiv) {
+				return;
+			}
+			connectedPeople = {};
+			for (var i = 0; i < users.length; i++) {
+				(function fetchUser() {
+					var userId = users[i];
+					var url = window.location.href.substring(0, window.location.href.indexOf("/activities/SharedNotes.activity")) + "/api/users/" + userId;
+					var req = new XMLHttpRequest();
+					req.open('GET', url, true);
+					req.onreadystatechange = function(aEvt) {
+						if (req.readyState == 4) {
+							if (req.status == 200) {
+								connectedPeople[userId] = JSON.parse(req.responseText)
+								displayConnectedPeopleHtml()
+							}
+						}
+					};
+					req.send(null);
+				})();
+			}
+		}
+
+		// Handle activity sharing
+		var shareActivity = function() {
+			network = activity.getPresenceObject(function(error, network) {
+				// Unable to join
+				if (error) {
+					console.log("error");
+					return;
+				}
+				isShared = true;
+
+				// Store settings
+				userSettings = network.getUserInfo();
+				console.log("connected");
+
+				// Not found, create a new shared activity
+				if (!window.top.sugar.environment.sharedId) {
+					isHost = true;
+					network.createSharedActivity('org.olpcfrance.sharednotes', function(groupId) {});
+				}
+
+				// Show a disconnected message when the WebSocket is closed.
+				network.onConnectionClosed(function(event) {
+					console.log(event);
+					console.log("Connection closed");
+				});
+
+				// Display connection changed
+				network.onSharedActivityUserChanged(function(msg) {
+					onNetworkUserChanged(msg);
+				});
+
+				// Handle messages received
+				network.onDataReceived(onNetworkDataReceived);
+			});		
+		}
+		
+		var sendMessage = function(content) {
+			try {
+				network.sendMessage(network.getSharedInfo().id, {
+					user: network.getUserInfo(),
+					content: content
+			});
+			} catch (e) {}
+		}
+		
+		var onNetworkDataReceived = function(msg) {
+			// Ignore messages coming from ourselves
+			if (network.getUserInfo().networkId === msg.user.networkId) {
+			  return;
+			}
+			switch (msg.content.action) {
+				case 'initialBoard':
+					// Receive initial board from the host
+					initGraph(msg.content.data);
+					break;
+					
+				case 'updateBoard':
+					// Board change received
+					doAction(msg.content.data.redo);
+					pushState(msg.content.data, true);
+					break
+				
+				case 'undoBoard':
+					// Undo board
+					undoState(true);
+					break;
+
+				case 'redoBoard':
+					// Redo board
+					redoState(true);
+					break;					
+			}
+		}
+		var onNetworkUserChanged = function(msg) {
+			var userName = msg.user.name.replace('<', '&lt;').replace('>', '&gt;');
+			var html = "<img style='height:30px;' src='" + generateXOLogoWithColor(msg.user.colorvalue) + "'>" + userName;
+			if (msg.move === 1) {
+				humane.log(html + " joined");
+				if (isHost) {
+					sendMessage({
+						action: 'initialBoard',
+						data: getGraph()
+					});
+				}
+			} else if (msg.move === -1) {
+				humane.log(html + " left");
+			}
+			network.listSharedActivities(function(activities) {
+				for (var i = 0; i < activities.length; i++) {
+					if (activities[i].id === network.getSharedInfo().id) {
+						displayConnectedPeople(activities[i].users);
+					}
+				}
+			});
+		}
+
+		// Handle presence palette
+		var networkButton = document.getElementById("network-button");
+		var presence = new presencepalette.PresencePalette(networkButton, undefined);
+		presence.addEventListener('shared', function() {
+			presence.popDown();
+			shareActivity();
+		});
+		if (window.top && window.top.sugar && window.top.sugar.environment && window.top.sugar.environment.sharedId) {
+			shareActivity();
+			presence.setShared(true);
 		}
 
 		// --- Cytoscape handling
